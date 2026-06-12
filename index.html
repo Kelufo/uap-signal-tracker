@@ -410,6 +410,7 @@ function renderFeed(){
         <span class="card-source" style="color:${src}">${escHtml(s.source)}</span>
         ${!s.isPursue?`<div class="conf-bar"><div class="conf-fill" style="width:${s.confidence}%"></div></div><span class="conf-label">${s.confidence}%</span>`:""}
         ${s.isPursue&&s.docId?`<span class="card-doc">${escHtml(s.docId)}</span>`:""}
+        ${(s.source==="X / TWITTER"||s.source==="SOCIAL MEDIA")?`<a href="https://x.com/search?q=${encodeURIComponent(s.location+" UFO UAP")}&f=live" target="_blank" onclick="event.stopPropagation()" style="margin-left:auto;font-family:'Share Tech Mono',monospace;font-size:.58rem;color:#1d9bf0;text-decoration:none;border:1px solid #1d9bf040;padding:1px 6px;border-radius:3px;background:rgba(29,155,240,.08)">↗ X</a>`:""}
       </div>
     </div>`;
   }).join("");
@@ -439,6 +440,9 @@ function selectSighting(id){
       ${tags.length?`<div class="field"><div class="field-label">Tags</div><div class="tag-row">${tags.map(t=>`<span class="tag ${tagClass}">${escHtml(t)}</span>`).join("")}</div></div>`:""}
       <div class="field"><div class="field-label">Full Description</div><div class="field-value" style="font-size:.78rem;color:#8ab8cc;line-height:1.55">${escHtml(s.desc)}</div></div>
       ${s.url?`<a class="ext-link green" href="${escHtml(s.url)}" target="_blank">↗ READ FULL ARTICLE</a>`:""}
+      ${(s.source==="X / TWITTER"||s.source==="SOCIAL MEDIA")?`<a class="ext-link" style="background:rgba(29,155,240,.1);border:1px solid rgba(29,155,240,.3);color:#1d9bf0" href="https://x.com/search?q=${encodeURIComponent(s.location+" UFO UAP")}&f=live" target="_blank">↗ SEARCH X / TWITTER FOR THIS SIGHTING</a>`:""}
+      ${s.source==="NUFORC"?`<a class="ext-link green" href="https://nuforc.org/subndx/?id=events" target="_blank">↗ VIEW ON NUFORC.ORG</a>`:""}
+      ${s.source==="MUFON"?`<a class="ext-link green" href="https://www.mufon.com/ufo-sightings.html" target="_blank">↗ VIEW ON MUFON.COM</a>`:""}
       ${s.isPursue?`<a class="ext-link red" href="https://www.war.gov/UFO/" target="_blank">↗ VIEW ON WAR.GOV/UFO</a>`:""}
       <div class="ai-block">
         <div class="ai-title"><div class="spinner"></div>AI PATTERN ANALYSIS</div>
@@ -531,7 +535,7 @@ setInterval(()=>{
       desc:descs[Math.floor(Math.random()*descs.length)],
       source:srcs[Math.floor(Math.random()*srcs.length)],
       duration:Math.floor(Math.random()*15+1)+" min",
-      altitude:"~"+(Math.floor(Math.random()*30+2)*1000)+" ft",
+      altitude:"~"+(Math.floor(Math.random()*28+2)*1000)+" ft",
       shape:tp,confidence:Math.floor(Math.random()*40+50),
       witnesses:Math.floor(Math.random()*8+1),isNew:true,isPursue:false,
       weather:"Clear",tags:["incoming"]
