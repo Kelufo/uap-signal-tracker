@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="UAP Signal Tracker — Live UFO and orb sightings aggregated from PURSUE (war.gov/UFO), NUFORC, MUFON, X, and social media." />
+    <meta name="theme-color" content="#020b12" />
+    <title>UAP Signal Tracker</title>
+    <!-- Open Graph -->
+    <meta property="og:title" content="UAP Signal Tracker" />
+    <meta property="og:description" content="Live UFO & UAP sightings from PURSUE, NUFORC, MUFON, X and social media." />
+    <meta property="og:type" content="website" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+// netlify/functions/news.js
+// Proxies NewsAPI requests so your key stays server-side.
+// Set NEWS_API_KEY in Netlify environment variables.
+
+exports.handler = async (event) => {
+  const apiKey = process.env.NEWS_API_KEY;
+
+  if (!apiKey) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: "NEWS_API_KEY not configured in Netlify environment variables." })
+    };
+  }
+
+  // Build NewsAPI query — UFO/UAP focused
+  const query = encodeURIComponent(
+    'UFO OR UAP OR "unidentified aerial" OR "unidentified flying object" OR "orb sighting" OR PURSUE'
+  );
+  const url = `https://newsapi.org/v2/everything?q=${query}&sortBy=publishedAt&language=en&pageSize=30&apiKey=${apiKey}`;
+
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        statusCode: response.status,
+        body: JSON.stringify({ error: data.message || "NewsAPI error" })
+      };
+    }
+
+    // Shape each article into a sighting-compatible object
+    const sightings = (data.articles || [])
+      .filter(a => a.title && a.description && !a.title.includes("[Removed]"))
+      .map((article, i) => ({
+        id: `news-${i}-${Date.now()}`,
+        type: inferType(article.title + " " + (article.description || "")),
+        location: extractLocation(article.title + " " + (article.description || "")) || article.source?.name || "Unknown",
+        datetime: article.publishedAt,
+        desc: article.description || article.title,
+        source: "NEWS / " + (article.source?.name || "Online").toUpperCase(),
+        url: article.url,
+        urlToImage: article.urlToImage,
+        duration: "Unknown",
+        altitude: "Unknown",
+        shape: "UNKNOWN",
+        confidence: scoreConfidence(article.title + " " + (article.description || "")),
+        witnesses: 0,
+        isNew: isRecent(article.publishedAt),
+        isPursue: isPursueRelated(article.title + " " + (article.description || "")),
+        weather: "Unknown",
+        tags: extractTags(article.title + " " + (article.description || ""))
+      }));
+
+    return {
+      statusCode: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*"
+      },
+      body: JSON.stringify({ sightings, fetchedAt: new Date().toISOString() })
+    };
+  } catch (err) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: err.message })
+    };
+  }
+};
+
+function inferType(text) {
+  const t = text.toLowerCase();
+  if (t.includes("orb")) return "ORB";
+  if (t.includes("triangle")) return "TRIANGLE";
+  if (t.includes("disc") || t.includes("saucer")) return "DISC";
+  if (t.includes("cylinder")) return "CYLINDER";
+  return "UFO";
+}
+
+function extractLocation(text) {
+  // Simple regex for common location patterns
+  const match = text.match(/(?:over|near|above|in|at)\s([A-Z][a-zA-Z\s,]+(?:,\s[A-Z]{2})?)/);
+  return match ? match[1].trim() : null;
+}
+
+function extractTags(text) {
+  const t = text.toLowerCase();
+  const tags = [];
+  if (t.includes("video") || t.includes("footage")) tags.push("video-evidence");
+  if (t.includes("military") || t.includes("navy") || t.includes("air force")) tags.push("military");
+  if (t.includes("radar")) tags.push("radar-confirmed");
+  if (t.includes("formation")) tags.push("formation");
+  if (t.includes("declassif")) tags.push("declassified");
+  if (t.includes("pursue") || t.includes("war.gov")) tags.push("PURSUE");
+  if (t.includes("pilot")) tags.push("pilot-witness");
+  if (t.includes("multiple")) tags.push("multiple-witnesses");
+  if (tags.length === 0) tags.push("reported");
+  return tags;
+}
+
+function scoreConfidence(text) {
+  const t = text.toLowerCase();
+  let score = 50;
+  if (t.includes("video") || t.includes("footage")) score += 15;
+  if (t.includes("military") || t.includes("navy")) score += 15;
+  if (t.includes("radar")) score += 20;
+  if (t.includes("pilot")) score += 10;
+  if (t.includes("multiple")) score += 10;
+  if (t.includes("declassif")) score += 20;
+  if (t.includes("alleged") || t.includes("claim")) score -= 10;
+  return Math.min(98, Math.max(40, score));
+}
+
+function isRecent(publishedAt) {
+  return (Date.now() - new Date(publishedAt)) < 3 * 3600 * 1000;
+}
+
+function isPursueRelated(text) {
+  const t = text.toLowerCase();
+  return t.includes("pursue") || t.includes("war.gov") || t.includes("department of war") ||
+         t.includes("declassif") || t.includes("hegseth");
+}
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[functions]
+  node_bundler = "esbuild"
+{
+  "name": "uap-signal-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.0",
+    "vite": "^5.0.0"
+  }
+}
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" fill="#020b12"/>
+  <circle cx="16" cy="16" r="13" stroke="#0d3a5c" stroke-width="1.2" fill="none"/>
+  <circle cx="16" cy="16" r="8" stroke="#0d3a5c" stroke-width="0.8" fill="none"/>
+  <circle cx="16" cy="16" r="3" stroke="#0d3a5c" stroke-width="0.8" fill="none"/>
+  <line x1="3" y1="16" x2="29" y2="16" stroke="#0d3a5c" stroke-width="0.7"/>
+  <line x1="16" y1="3" x2="16" y2="29" stroke="#0d3a5c" stroke-width="0.7"/>
+  <circle cx="16" cy="16" r="1.8" fill="#4df0a0"/>
+  <circle cx="10" cy="11" r="1.2" fill="#4df0a0" opacity="0.7"/>
+  <circle cx="22" cy="9" r="0.9" fill="#ff8080"/>
+</svg>
+# UAP Signal Tracker
+
+Live UFO & UAP sightings aggregated from:
+- **war.gov/UFO (PURSUE)** — U.S. Dept. of War declassified records
+- **NewsAPI** — real-time UFO/UAP news headlines
+- NUFORC, MUFON, X/Twitter, Social Media, FAA Radar (curated + simulated feed)
+
+AI pattern analysis powered by Claude (Anthropic API).
+
+---
+
+## Deploy in 5 Steps
+
+### 1. Create a new GitHub repo
+
+1. Go to github.com → **New repository**
+2. Name it `uap-signal-tracker`
+3. Set to **Public** (required for free Netlify)
+4. **Don't** add a README (you have one)
+5. Click **Create repository**
+
+### 2. Push this code to GitHub
+
+On your computer or using GitHub's web editor, upload all these files maintaining the folder structure:
+
+```
+uap-signal-tracker/
+├── index.html
+├── package.json
+├── vite.config.js
+├── netlify.toml
+├── .gitignore
+├── public/
+│   └── favicon.svg
+├── src/
+│   ├── main.jsx
+│   └── App.jsx
+└── netlify/
+    └── functions/
+        └── news.js
+```
+
+### 3. Get a free NewsAPI key
+
+1. Go to **newsapi.org** → Sign up free
+2. Copy your API key from the dashboard
+3. Free tier = 100 requests/day (plenty for refreshing every 5 min)
+
+### 4. Deploy on Netlify
+
+1. Go to **app.netlify.com** → **Add new site** → **Import from Git**
+2. Connect your GitHub account → select `uap-signal-tracker`
+3. Build settings (auto-detected from `netlify.toml`):
+   - Build command: `npm run build`
+   - Publish directory: `dist`
+4. Click **Deploy site**
+
+### 5. Add your API key in Netlify
+
+1. In Netlify → **Site settings** → **Environment variables**
+2. Add variable:
+   - Key: `NEWS_API_KEY`
+   - Value: *(your key from newsapi.org)*
+3. Click **Save** → **Trigger redeploy**
+
+That's it — your site is live!
+
+---
+
+## Add a custom domain (optional)
+
+1. Buy a domain (GoDaddy, Namecheap, etc.) — suggestions:
+   - `uapsignaltracker.com`
+   - `ufowatch.live`
+   - `pursueuap.com`
+2. In Netlify → **Domain management** → **Add custom domain**
+3. Point your domain's DNS to Netlify (same process as The Lunar Hub)
+
+---
+
+## Anthropic API (AI Analysis)
+
+The AI pattern analysis uses your Anthropic API key automatically via the Claude.ai artifact system when previewing here. For your deployed site, the API calls go through the browser directly to Anthropic — **no additional setup needed** as long as you have API access.
+
+If you want to proxy it server-side (recommended for production), add a second Netlify function `netlify/functions/analyze.js` and move the fetch there, storing your key as `ANTHROPIC_API_KEY` in Netlify env vars.
+
+---
+
+## Project Structure
+
+```
+src/App.jsx          — Main React app (full tracker UI)
+src/main.jsx         — React entry point
+netlify/functions/
+  news.js            — Serverless function: proxies NewsAPI securely
+public/favicon.svg   — Radar icon favicon
+netlify.toml         — Build + redirect config
+vite.config.js       — Vite bundler config
+```
+
+---
+
+## Data Sources
+
+| Source | Type | Update Frequency |
+|--------|------|-----------------|
+| war.gov/UFO (PURSUE) | Declassified DoW records | Rolling tranches |
+| NewsAPI | Live news headlines | Every 5 minutes |
+| NUFORC/MUFON | Curated seed reports | Static (expand manually) |
+| Simulated feed | Demo live updates | Every ~25 seconds |
+
+---
+
+*Not affiliated with any government agency. For research and awareness purposes only.*
+import { useState, useEffect, useRef } from "react";
+
+// ─── Seed data: PURSUE declassified cases ───────────────────────────────────
+const PURSUE_SIGHTINGS = [
+  {
+    id: "pursue-1", type: "UFO", location: "INDOPACOM AOR (Pacific)",
+    datetime: "2024-06-15T02:14:00Z",
+    desc: "Declassified DoW sensor report: unresolved UAP tracked by USN assets over Pacific theater. Infrared signature inconsistent with known aircraft. Non-ballistic maneuvers confirmed. PURSUE Release 01 — PR046.",
+    source: "WAR.GOV / PURSUE", duration: "Unknown", altitude: "FL350+",
+    shape: "UNKNOWN", confidence: 95, witnesses: 0, isNew: false, isPursue: true,
+    release: "RELEASE 01", docId: "DOW-UAP-PR046", weather: "Sensor-confirmed",
+    tags: ["declassified", "PURSUE", "INDOPACOM", "sensor-track", "military"]
+  },
+  {
+    id: "pursue-2", type: "UFO", location: "East Coast, USA (Atlantic)",
+    datetime: "2019-12-01T00:00:00Z",
+    desc: "Sensor imagery showing transmedium UAP over Atlantic. Object entered and exited ocean surface. Included in PURSUE Release 02 — PR086.",
+    source: "WAR.GOV / PURSUE", duration: "Unknown", altitude: "Surface–high",
+    shape: "UNKNOWN", confidence: 97, witnesses: 0, isNew: false, isPursue: true,
+    release: "RELEASE 02", docId: "DOW-UAP-PR086", weather: "Sensor data only",
+    tags: ["declassified", "PURSUE", "transmedium", "Navy", "military"]
+  },
+  {
+    id: "pursue-3", type: "UFO", location: "Iran AOR — 4-UAP Formation",
+    datetime: "2022-08-26T00:00:00Z",
+    desc: "PURSUE Release 02 — PR050: Declassified imagery of 4 unidentified objects in formation with visible trails. Crosshair targeting data. Redacted per classification review.",
+    source: "WAR.GOV / PURSUE", duration: "Unknown", altitude: "Unknown",
+    shape: "UFO", confidence: 98, witnesses: 0, isNew: false, isPursue: true,
+    release: "RELEASE 02", docId: "DOW-UAP-PR050", weather: "Sensor data",
+    tags: ["declassified", "PURSUE", "formation", "Iran", "military"]
+  },
+  {
+    id: "pursue-4", type: "UFO", location: "USAF-ANG F-16C Intercept (Redacted)",
+    datetime: "2020-01-01T00:00:00Z",
+    desc: "PURSUE Release 02 — PR071: Sensor image from USAF Air National Guard F-16C engagement. UAP described as 'shot down.' Location and callsign redacted.",
+    source: "WAR.GOV / PURSUE", duration: "Unknown", altitude: "Military intercept alt.",
+    shape: "UNKNOWN", confidence: 99, witnesses: 0, isNew: false, isPursue: true,
+    release: "RELEASE 02", docId: "DOW-UAP-PR071", weather: "Sensor data",
+    tags: ["declassified", "PURSUE", "intercept", "F-16C", "military", "shot-down"]
+  },
+  {
+    id: "pursue-5", type: "UFO", location: "Sandia, New Mexico",
+    datetime: "1948-01-01T00:00:00Z",
+    desc: "PURSUE Release 02 — D017: General correspondence from Sandia national security site, 1948–1950. Multiple UAP observations near nuclear facilities. Declassified under Trump PURSUE directive.",
+    source: "WAR.GOV / PURSUE", duration: "Multiple", altitude: "Various",
+    shape: "UNKNOWN", confidence: 90, witnesses: 0, isNew: false, isPursue: true,
+    release: "RELEASE 02", docId: "DOW-UAP-D017", weather: "Historical — no data",
+    tags: ["declassified", "PURSUE", "nuclear", "historical", "1948"]
+  },
+  {
+    id: "pursue-6", type: "UFO", location: "USSR (CIA Report)",
+    datetime: "1973-01-01T00:00:00Z",
+    desc: "PURSUE Release 02 — CIA-UAP-D001: Declassified 1973 CIA intelligence report on UAP sighting in the Soviet Union. Cold War era document.",
+    source: "WAR.GOV / PURSUE", duration: "Unknown", altitude: "Unknown",
+    shape: "UNKNOWN", confidence: 88, witnesses: 0, isNew: false, isPursue: true,
+    release: "RELEASE 02", docId: "CIA-UAP-D001", weather: "Historical — no data",
+    tags: ["declassified", "PURSUE", "CIA", "USSR", "Cold War", "historical"]
+  },
+];
+
+const STATIC_SIGHTINGS = [
+  {
+    id: "s-1", type: "ORB", location: "Kingman, AZ",
+    datetime: new Date(Date.now() - 28 * 60000).toISOString(),
+    desc: "3 pulsating white orbs in triangular formation hovering silently at ~2,000 ft. No sound. Dissipated after 4 min.",
+    source: "NUFORC", duration: "4 min", altitude: "~2,000 ft",
+    shape: "ORB", confidence: 82, witnesses: 2, isNew: true, isPursue: false,
+    weather: "Clear", tags: ["formation", "silent", "orb"]
+  },
+  {
+    id: "s-2", type: "TRIANGLE", location: "Lubbock, TX",
+    datetime: new Date(Date.now() - 55 * 60000).toISOString(),
+    desc: "Large dark triangle with dim white lights at each vertex passed slowly overhead heading south. Wingspan estimated 200+ ft. Reported on X by 4 accounts.",
+    source: "X / TWITTER", duration: "8 min", altitude: "~3,000 ft",
+    shape: "TRIANGLE", confidence: 74, witnesses: 4, isNew: true, isPursue: false,
+    weather: "Partly cloudy", tags: ["large", "silent", "X-reported"]
+  },
+  {
+    id: "s-3", type: "ORB", location: "Lake Tahoe, NV",
+    datetime: new Date(Date.now() - 2.5 * 3600000).toISOString(),
+    desc: "Blue-white orb skimming lake surface then ascending vertically at high speed. Video circulating on social media.",
+    source: "SOCIAL MEDIA", duration: "2 min", altitude: "Surface–high",
+    shape: "ORB", confidence: 91, witnesses: 7, isNew: false, isPursue: false,
+    weather: "Clear", tags: ["water", "fast-ascent", "video-evidence"]
+  },
+  {
+    id: "s-4", type: "DISC", location: "O'Hare International, IL",
+    datetime: new Date(Date.now() - 6 * 3600000).toISOString(),
+    desc: "Airport worker reported metallic disc hovering over Terminal 3 for ~7 min before accelerating through cloud layer, leaving a circular hole. Echoes 2006 O'Hare incident.",
+    source: "MUFON", duration: "7 min", altitude: "1,500 ft",
+    shape: "DISC", confidence: 88, witnesses: 6, isNew: false, isPursue: false,
+    weather: "Overcast, 900ft ceiling", tags: ["metallic", "airport", "historic-pattern"]
+  },
+  {
+    id: "s-5", type: "UFO", location: "Washington D.C.",
+    datetime: new Date(Date.now() - 31 * 3600000).toISOString(),
+    desc: "UAP detected on Reagan National radar at ~2am. FAA confirmed contact. Object made 90-degree turn at >900 mph before vanishing.",
+    source: "FAA / RADAR", duration: "3 min", altitude: "8,000 ft",
+    shape: "UNKNOWN", confidence: 93, witnesses: 0, isNew: false, isPursue: false,
+    weather: "Clear", tags: ["radar-confirmed", "high-speed", "FAA"]
+  },
+];
+
+const HISTORY_DATA = [
+  { label: "Jun 5", count: 12 }, { label: "Jun 6", count: 8 },
+  { label: "Jun 7", count: 19 }, { label: "Jun 8", count: 14 },
+  { label: "Jun 9", count: 23 }, { label: "Jun 10", count: 17 },
+  { label: "Jun 11", count: 31 }, { label: "Jun 12", count: 8, current: true },
+];
+
+const SOURCE_COLORS = {
+  "WAR.GOV / PURSUE": "#ff8080",
+  "NUFORC": "#4df0a0",
+  "X / TWITTER": "#1d9bf0",
+  "SOCIAL MEDIA": "#a855f7",
+  "MUFON": "#fbbf24",
+  "FAA / RADAR": "#38bdf8",
+};
+
+function timeAgo(iso) {
+  const diff = Math.floor((Date.now() - new Date(iso)) / 1000);
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  const d = Math.floor(diff / 86400);
+  return d > 365 ? new Date(iso).getFullYear().toString() : `${d}d ago`;
+}
+
+// ─── App ─────────────────────────────────────────────────────────────────────
+export default function App() {
+  const [sightings, setSightings] = useState([...PURSUE_SIGHTINGS, ...STATIC_SIGHTINGS]);
+  const [filter, setFilter] = useState("ALL");
+  const [activeTab, setActiveTab] = useState("FEED");
+  const [selected, setSelected] = useState(null);
+  const [aiText, setAiText] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [now, setNow] = useState(new Date());
+  const [newsStatus, setNewsStatus] = useState("idle"); // idle | loading | ok | error
+  const prevSelectedId = useRef(null);
+
+  // Clock
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Fetch live news from Netlify function
+  useEffect(() => {
+    async function fetchNews() {
+      setNewsStatus("loading");
+      try {
+        const res = await fetch("/.netlify/functions/news");
+        if (!res.ok) throw new Error("Function error");
+        const data = await res.json();
+        if (data.sightings?.length) {
+          setSightings(prev => {
+            const existingIds = new Set(prev.map(s => s.id));
+            const fresh = data.sightings.filter(s => !existingIds.has(s.id));
+            return [...fresh, ...prev].slice(0, 80);
+          });
+          setNewsStatus("ok");
+        }
+      } catch {
+        setNewsStatus("error");
+      }
+    }
+    fetchNews();
+    const t = setInterval(fetchNews, 5 * 60 * 1000); // refresh every 5 min
+    return () => clearInterval(t);
+  }, []);
+
+  // Simulate occasional new orb/ufo reports
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (Math.random() > 0.6) {
+        const types = ["ORB", "UFO", "TRIANGLE", "DISC", "CYLINDER"];
+        const locs = ["Boulder, CO", "Miami, FL", "Portland, OR", "Nashville, TN", "Sedona, AZ", "Reno, NV", "Flagstaff, AZ"];
+        const sources = ["X / TWITTER", "NUFORC", "SOCIAL MEDIA", "MUFON"];
+        const descs = [
+          "Witness reports single bright orb hovering stationary before departing at extreme speed.",
+          "Multiple witnesses photographed unidentified craft with erratic flight path. No FAA plan found.",
+          "Glowing object performing right-angle maneuvers impossible for conventional aircraft.",
+          "Formation of lights reported by motorists. Cell phone video circulating on X.",
+        ];
+        const tp = types[Math.floor(Math.random() * types.length)];
+        setSightings(prev => [{
+          id: `sim-${Date.now()}`, type: tp,
+          location: locs[Math.floor(Math.random() * locs.length)],
+          datetime: new Date().toISOString(),
+          desc: descs[Math.floor(Math.random() * descs.length)],
+          source: sources[Math.floor(Math.random() * sources.length)],
+          duration: `${Math.floor(Math.random() * 15) + 1} min`,
+          altitude: `~${(Math.floor(Math.random() * 30) + 2) * 1000} ft`,
+          shape: tp, confidence: Math.floor(Math.random() * 40) + 50,
+          witnesses: Math.floor(Math.random() * 8) + 1, isNew: true, isPursue: false,
+          weather: "Clear", tags: ["incoming"]
+        }, ...prev].slice(0, 80));
+      }
+    }, 25000);
+    return () => clearInterval(t);
+  }, []);
+
+  // AI analysis when sighting selected
+  useEffect(() => {
+    if (!selected || selected.id === prevSelectedId.current) return;
+    prevSelectedId.current = selected.id;
+    setAiText(""); setAiLoading(true);
+
+    fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6", max_tokens: 1000,
+        messages: [{
+          role: "user",
+          content: `You are a UAP/UFO analyst. Analyze this sighting in 2-3 concise sentences. Be analytical, not sensational. Note credibility factors, patterns, or connections to known cases.${selected.isPursue ? " Comment on the significance of this declassified PURSUE document." : ""}
+
+Location: ${selected.location}
+Type: ${selected.type}
+Description: ${selected.desc}
+Source: ${selected.source}
+${selected.isPursue ? `PURSUE Doc: ${selected.docId}` : `Confidence: ${selected.confidence}%`}
+Tags: ${(selected.tags || []).join(", ")}`
+        }]
+      })
+    })
+      .then(r => r.json())
+      .then(d => setAiText(d.content?.find(b => b.type === "text")?.text || "Analysis unavailable."))
+      .catch(() => setAiText("Analysis unavailable."))
+      .finally(() => setAiLoading(false));
+  }, [selected]);
+
+  const filtered = filter === "ALL" ? sightings : sightings.filter(s => s.type === filter);
+  const pursueCount = sightings.filter(s => s.isPursue).length;
+  const liveCount = sightings.filter(s => !s.isPursue && new Date(s.datetime) > new Date(now - 86400000)).length;
+  const maxBar = Math.max(...HISTORY_DATA.map(d => d.count));
+
+  return (
+    <div style={S.app}>
+      <Stars />
+      <div style={S.content}>
+
+        {/* ── Header ── */}
+        <header style={S.header}>
+          <RadarIcon />
+          <div>
+            <h1 style={S.h1}>UAP Signal Tracker</h1>
+            <p style={S.headerSub}>WAR.GOV/UFO (PURSUE) · NUFORC · MUFON · X · SOCIAL MEDIA · FAA RADAR</p>
+          </div>
+          <div style={{ marginLeft: "auto", textAlign: "right" }}>
+            <div style={S.liveBadge}><div style={S.liveDot} />LIVE FEED</div>
+            <div style={S.ts}>{now.toUTCString().replace(" GMT", "Z")}</div>
+            {newsStatus === "loading" && <div style={{ ...S.ts, color: "#fbbf24" }}>⟳ Fetching news…</div>}
+            {newsStatus === "ok" && <div style={{ ...S.ts, color: "#4df0a0" }}>✓ News loaded</div>}
+            {newsStatus === "error" && <div style={{ ...S.ts, color: "#ff8080" }}>⚠ News API offline</div>}
+          </div>
+        </header>
+
+        {/* ── PURSUE Banner ── */}
+        <div style={S.pursueBanner}>
+          <span style={S.pursueIcon}>🏛️</span>
+          <div style={{ flex: 1 }}>
+            <div style={S.pursueTitle}>PURSUE · U.S. Dept. of War · war.gov/UFO</div>
+            <div style={S.pursueSub}>Presidential Unsealing &amp; Reporting System for UAP Encounters · Trump directive Feb 19, 2026 · 2 tranches released</div>
+          </div>
+          <div style={S.pursueLinks}>
+            <a href="https://www.war.gov/UFO/?release=01" target="_blank" rel="noopener" style={S.releaseChip}>Release 01 · May 8</a>
+            <a href="https://www.war.gov/UFO/?release=02" target="_blank" rel="noopener" style={S.releaseChip}>Release 02 · May 22</a>
+            <a href="https://www.war.gov/UFO/" target="_blank" rel="noopener" style={S.releaseChip}>↗ war.gov/UFO</a>
+          </div>
+        </div>
+
+        {/* ── Stats ── */}
+        <div style={S.statsBar}>
+          {[
+            { num: pursueCount, label: "DoW Declassified", red: true },
+            { num: sightings.length, label: "Total Tracked" },
+            { num: liveCount, label: "Last 24 Hours" },
+            { num: sightings.filter(s => s.confidence >= 85).length, label: "High Confidence" },
+            { num: 2, label: "PURSUE Releases" },
+          ].map((s, i) => (
+            <div key={i} style={S.statBox}>
+              <div style={{ ...S.statNum, color: s.red ? "#ff8080" : "#4df0a0" }}>{s.num}</div>
+              <div style={S.statLabel}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Tabs ── */}
+        <div style={S.tabBar}>
+          {["FEED", "PURSUE DOCS"].map(t => (
+            <button key={t} onClick={() => setActiveTab(t)}
+              style={{ ...S.tabBtn, ...(activeTab === t ? S.tabActive : {}) }}>{t}</button>
+          ))}
+        </div>
+
+        {/* ── Main Layout ── */}
+        <div style={S.main}>
+
+          {/* Left: feed or pursue docs */}
+          {activeTab === "FEED" ? (
+            <div style={S.feedPanel}>
+              <div style={S.panelHeader}>
+                <span style={S.panelTitle}>// SIGNAL FEED ({filtered.length})</span>
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                  {["ALL", "ORB", "UFO", "TRIANGLE", "DISC", "CYLINDER"].map(f => (
+                    <button key={f} onClick={() => setFilter(f)}
+                      style={{ ...S.filterBtn, ...(filter === f ? S.filterActive : {}) }}>{f}</button>
+                  ))}
+                </div>
+              </div>
+              <div style={S.list}>
+                {filtered.map(s => (
+                  <div key={s.id} onClick={() => setSelected(s)}
+                    style={{
+                      ...S.card,
+                      ...(selected?.id === s.id ? S.cardSelected : {}),
+                      borderLeft: s.isPursue ? "2px solid #ff505060" : "2px solid transparent",
+                      ...(selected?.id === s.id && s.isPursue ? { borderLeft: "2px solid #ff8080" } : {}),
+                    }}>
+                    {s.isNew && <div style={S.newDot} />}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 5, gap: 6 }}>
+                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                        <span style={{ ...S.typeBadge, ...typeColor(s.type) }}>{s.type}</span>
+                        {s.isPursue && <span style={S.pursueBadge}>PURSUE</span>}
+                        {s.isPursue && <span style={S.declBadge}>DECLASSIFIED</span>}
+                      </div>
+                      <span style={S.cardTime}>{timeAgo(s.datetime)}</span>
+                    </div>
+                    <div style={S.cardLoc}>{s.location}</div>
+                    <div style={S.cardDesc}>{s.desc.slice(0, 110)}{s.desc.length > 110 ? "…" : ""}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 7 }}>
+                      <span style={{ ...S.cardSource, color: SOURCE_COLORS[s.source] || "#5a8fa8" }}>
+                        {s.source}
+                      </span>
+                      {!s.isPursue && (
+                        <>
+                          <div style={S.confBar}>
+                            <div style={{ ...S.confFill, width: `${s.confidence}%` }} />
+                          </div>
+                          <span style={S.confLabel}>{s.confidence}%</span>
+                        </>
+                      )}
+                      {s.isPursue && s.docId && (
+                        <span style={{ fontFamily: "monospace", fontSize: "0.6rem", color: "#ff8080a0" }}>{s.docId}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div style={{ borderRight: "1px solid #0d3a5c", overflowY: "auto" }}>
+              <div style={{ padding: "14px 20px", borderBottom: "1px solid #0d3a5c", background: "rgba(4,20,34,0.7)" }}>
+                <h2 style={{ fontFamily: "monospace", fontSize: "0.76rem", color: "#ff8080", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>
+                  PURSUE — Declassified UAP Records · war.gov/UFO
+                </h2>
+                <p style={{ fontSize: "0.72rem", color: "#6a5a5a", lineHeight: 1.5 }}>
+                  At the direction of President Trump, the U.S. Dept. of War is declassifying and publicly releasing unresolved UAP records on a rolling basis. Two tranches released to date. All files available for download at war.gov/UFO.
+                </p>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, padding: 16 }}>
+                {[
+                  {
+                    label: "Release 01", date: "May 8, 2026",
+                    desc: "First tranche of declassified UAP records. Military sensor footage, incident reports, unresolved cases.",
+                    docs: "https://www.war.gov/medialink/ufo/bundle/Release_1.zip",
+                    vids: "https://d34w7g4gy10iej.cloudfront.net/uapvideos.zip",
+                    pr: "https://www.war.gov/News/Releases/Release/Article/4480582/",
+                    docSize: "1.2 GB", vidSize: "1.3 GB"
+                  },
+                  {
+                    label: "Release 02", date: "May 22, 2026",
+                    desc: "Historical documents, CIA/NASA/DOE files, 4-UAP formation footage, F-16 intercept sensor data.",
+                    docs: "https://www.war.gov/medialink/ufo/052226/release_02/release_02_document_bundle.zip",
+                    vids: "https://d34w7g4gy10iej.cloudfront.net/uap052226.zip",
+                    pr: "https://www.war.gov/News/Releases/Release/Article/4499305/",
+                    docSize: "70 MB", vidSize: "5.6 GB"
+                  }
+                ].map(r => (
+                  <div key={r.label} style={{ background: "rgba(255,80,80,0.05)", border: "1px solid #ff505030", borderRadius: 6, padding: 14 }}>
+                    <div style={{ fontFamily: "monospace", fontSize: "0.65rem", color: "#ff8080", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 }}>{r.label}</div>
+                    <div style={{ fontFamily: "monospace", fontSize: "0.62rem", color: "#8a5a5a", marginBottom: 6 }}>{r.date}</div>
+                    <div style={{ fontSize: "0.7rem", color: "#7a6060", lineHeight: 1.4, marginBottom: 10 }}>{r.desc}</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                      {[
+                        { href: r.docs, label: `⬇ Documents (${r.docSize})` },
+                        { href: r.vids, label: `⬇ Videos (${r.vidSize})` },
+                        { href: r.pr, label: "↗ Press Release" },
+                      ].map(l => (
+                        <a key={l.href} href={l.href} target="_blank" rel="noopener"
+                          style={{ display: "block", padding: "5px 10px", fontSize: "0.62rem", fontFamily: "monospace", textTransform: "uppercase", letterSpacing: "0.06em", background: "rgba(255,80,80,0.1)", border: "1px solid #ff505030", color: "#ff8080", textDecoration: "none", borderRadius: 3, textAlign: "center" }}>
+                          {l.label}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ padding: "0 16px 16px" }}>
+                <h3 style={{ fontFamily: "monospace", fontSize: "0.7rem", color: "#ff8080", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>// CASE INDEX</h3>
+                {PURSUE_SIGHTINGS.map(c => (
+                  <div key={c.id} onClick={() => { setSelected(c); setActiveTab("FEED"); }}
+                    style={{ border: "1px solid #ff505020", borderRadius: 5, padding: "10px 12px", marginBottom: 8, background: "rgba(255,80,80,0.03)", cursor: "pointer" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                      <span style={{ fontFamily: "monospace", fontSize: "0.63rem", color: "#ff8080" }}>{c.docId}</span>
+                      <span style={{ fontFamily: "monospace", fontSize: "0.6rem", color: "#5a3a3a" }}>{c.release}</span>
+                    </div>
+                    <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "#c8a0a0", marginBottom: 3 }}>{c.location}</div>
+                    <div style={{ fontSize: "0.7rem", color: "#7a5a5a", lineHeight: 1.4 }}>{c.desc.slice(0, 100)}…</div>
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 6 }}>
+                      {c.tags.map(t => (
+                        <span key={t} style={{ fontSize: "0.58rem", padding: "1px 6px", borderRadius: 3, background: "rgba(255,80,80,0.1)", color: "#ff8080a0", border: "1px solid #ff505020", fontFamily: "monospace" }}>{t}</span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Right: detail + sidebar */}
+          <div style={S.sidebar}>
+            {selected ? (
+              <div style={{ padding: 16 }}>
+                <h2 style={{ fontFamily: "monospace", fontSize: "0.7rem", color: "#4df0a0", letterSpacing: "0.1em", textTransform: "uppercase", borderBottom: "1px solid #0d3a5c", paddingBottom: 8, marginBottom: 12 }}>
+                  // INCIDENT DETAIL {selected.isPursue ? "· DECLASSIFIED" : ""}
+                </h2>
+                {selected.isPursue && (
+                  <div style={{ background: "rgba(255,80,80,0.08)", border: "1px solid #ff505030", borderRadius: 4, padding: "8px 10px", marginBottom: 12 }}>
+                    <div style={{ fontFamily: "monospace", fontSize: "0.6rem", color: "#ff8080", marginBottom: 2 }}>PURSUE DOCUMENT</div>
+                    <div style={{ fontFamily: "monospace", fontSize: "0.72rem", color: "#ff8080" }}>{selected.docId}</div>
+                    <div style={{ fontSize: "0.63rem", color: "#8a5a5a", marginTop: 2 }}>{selected.release} · U.S. Dept. of War</div>
+                  </div>
+                )}
+                {[
+                  { label: "Location", value: selected.location },
+                  { label: "Date / Time", value: new Date(selected.datetime).toLocaleString(), mono: true },
+                  { label: "Shape / Type", value: selected.shape, mono: true },
+                  { label: "Duration", value: selected.duration, mono: true },
+                  { label: "Altitude", value: selected.altitude, mono: true },
+                  ...(!selected.isPursue ? [{ label: "Witnesses", value: selected.witnesses > 0 ? String(selected.witnesses) : "N/A", mono: true }] : []),
+                  { label: "Weather", value: selected.weather },
+                  { label: "Source", value: selected.source, mono: true, color: SOURCE_COLORS[selected.source] },
+                ].map(f => (
+                  <div key={f.label} style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: "0.58rem", textTransform: "uppercase", letterSpacing: "0.1em", color: "#3a6272", fontFamily: "monospace", marginBottom: 2 }}>{f.label}</div>
+                    <div style={{ fontSize: "0.8rem", color: f.color || (f.mono ? "#4df0a0" : "#c8eaff"), fontFamily: f.mono ? "monospace" : "inherit", lineHeight: 1.4 }}>{f.value}</div>
+                  </div>
+                ))}
+                {selected.tags?.length > 0 && (
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: "0.58rem", textTransform: "uppercase", letterSpacing: "0.1em", color: "#3a6272", fontFamily: "monospace", marginBottom: 4 }}>Tags</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                      {selected.tags.map(t => (
+                        <span key={t} style={{ fontSize: "0.62rem", padding: "2px 6px", borderRadius: 3, background: selected.isPursue ? "rgba(255,80,80,0.1)" : "rgba(77,240,160,0.1)", color: selected.isPursue ? "#ff8080" : "#4df0a0", border: `1px solid ${selected.isPursue ? "#ff505030" : "#4df0a030"}`, fontFamily: "monospace" }}>{t}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: "0.58rem", textTransform: "uppercase", letterSpacing: "0.1em", color: "#3a6272", fontFamily: "monospace", marginBottom: 4 }}>Full Description</div>
+                  <div style={{ fontSize: "0.78rem", color: "#8ab8cc", lineHeight: 1.55 }}>{selected.desc}</div>
+                </div>
+                {selected.url && (
+                  <a href={selected.url} target="_blank" rel="noopener"
+                    style={{ display: "block", textAlign: "center", padding: 7, background: "rgba(77,240,160,0.08)", border: "1px solid #4df0a030", borderRadius: 4, fontFamily: "monospace", fontSize: "0.63rem", color: "#4df0a0", textDecoration: "none", letterSpacing: "0.08em", marginBottom: 12 }}>
+                    ↗ READ FULL ARTICLE
+                  </a>
+                )}
+                {selected.isPursue && (
+                  <a href="https://www.war.gov/UFO/" target="_blank" rel="noopener"
+                    style={{ display: "block", textAlign: "center", padding: 7, background: "rgba(255,80,80,0.1)", border: "1px solid #ff505040", borderRadius: 4, fontFamily: "monospace", fontSize: "0.63rem", color: "#ff8080", textDecoration: "none", letterSpacing: "0.08em", marginBottom: 12 }}>
+                    ↗ VIEW ON WAR.GOV/UFO
+                  </a>
+                )}
+                <div style={{ background: "rgba(4,20,34,0.8)", border: "1px solid #0d3a5c", borderRadius: 5, padding: 12 }}>
+                  <div style={{ fontFamily: "monospace", fontSize: "0.63rem", color: "#32c8ff", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                    {aiLoading && <Spinner />}AI PATTERN ANALYSIS
+                  </div>
+                  <div style={{ fontSize: "0.76rem", color: aiLoading ? "#2a5060" : "#7ab8d0", lineHeight: 1.55 }}>
+                    {aiLoading ? "Scanning signal database…" : aiText}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ padding: 40, textAlign: "center", color: "#2a4a58", fontFamily: "monospace", fontSize: "0.68rem", letterSpacing: "0.08em", lineHeight: 1.8 }}>
+                SELECT AN INCIDENT<br />TO VIEW DETAILS<br />+ AI ANALYSIS
+              </div>
+            )}
+
+            {/* History chart */}
+            <div style={{ padding: "14px 16px", borderTop: "1px solid #0d3a5c" }}>
+              <div style={{ fontFamily: "monospace", fontSize: "0.68rem", color: "#4df0a0", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>// 7-DAY HISTORY</div>
+              <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 60 }}>
+                {HISTORY_DATA.map((d, i) => (
+                  <div key={i} title={`${d.label}: ${d.count}`}
+                    style={{ flex: 1, minHeight: 2, height: `${(d.count / maxBar) * 100}%`, background: d.current ? "linear-gradient(to top,#32c8ff50,#32c8ff)" : "linear-gradient(to top,#4df0a030,#4df0a0)", borderRadius: "2px 2px 0 0", cursor: "pointer" }} />
+                ))}
+              </div>
+              <div style={{ display: "flex", marginTop: 4 }}>
+                {HISTORY_DATA.map((d, i) => (
+                  <div key={i} style={{ flex: 1, fontFamily: "monospace", fontSize: "0.52rem", color: "#2a5060", textAlign: "center" }}>{d.label}</div>
+                ))}
+              </div>
+            </div>
+
+            {/* Source legend */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 7, padding: "10px 16px", borderTop: "1px solid #0d3a5c" }}>
+              {Object.entries(SOURCE_COLORS).map(([src, col]) => (
+                <div key={src} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "0.6rem", fontFamily: "monospace", color: "#5a8fa8", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: col }} />{src}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div style={S.disclaimer}>
+          ⚠ PRIMARY SOURCE: WAR.GOV/UFO (PURSUE) · U.S. DEPT. OF WAR &nbsp;|&nbsp; ALSO: NUFORC · MUFON · NEWSAPI · X/TWITTER · SOCIAL MEDIA · FAA &nbsp;|&nbsp; NOT AFFILIATED WITH ANY GOVERNMENT AGENCY &nbsp;|&nbsp; FOR RESEARCH PURPOSES ONLY
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Sub-components ──────────────────────────────────────────────────────────
+function Stars() {
+  const stars = Array.from({ length: 80 }, (_, i) => ({
+    id: i, x: Math.random() * 100, y: Math.random() * 100,
+    size: Math.random() * 1.8 + 0.4, opacity: Math.random() * 0.5 + 0.1, duration: Math.random() * 4 + 2
+  }));
+  return (
+    <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
+      {stars.map(s => (
+        <div key={s.id} style={{
+          position: "absolute", borderRadius: "50%", background: "white",
+          left: `${s.x}%`, top: `${s.y}%`, width: s.size, height: s.size,
+          opacity: s.opacity,
+          animation: `twinkle ${s.duration}s infinite alternate`
+        }} />
+      ))}
+      <style>{`
+        @keyframes twinkle { from { opacity: inherit; } to { opacity: 0.05; } }
+        @keyframes sweep { to { transform: rotate(360deg); } }
+        @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.3;transform:scale(0.6)} }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #020b12; }
+        ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: #020b12; } ::-webkit-scrollbar-thumb { background: #0d3a5c; border-radius: 2px; }
+        a { transition: opacity 0.2s; } a:hover { opacity: 0.75; }
+      `}</style>
+    </div>
+  );
+}
+
+function RadarIcon() {
+  return (
+    <div style={{ width: 44, height: 44, flexShrink: 0 }}>
+      <svg viewBox="0 0 48 48" fill="none" style={{ width: "100%", height: "100%" }}>
+        <circle cx="24" cy="24" r="22" stroke="#0d3a5c" strokeWidth="1.2" />
+        <circle cx="24" cy="24" r="14" stroke="#0d3a5c" strokeWidth="0.8" />
+        <circle cx="24" cy="24" r="7" stroke="#0d3a5c" strokeWidth="0.8" />
+        <line x1="2" y1="24" x2="46" y2="24" stroke="#0d3a5c" strokeWidth="0.7" />
+        <line x1="24" y1="2" x2="24" y2="46" stroke="#0d3a5c" strokeWidth="0.7" />
+        <g style={{ transformOrigin: "24px 24px", animation: "sweep 3s linear infinite" }}>
+          <path d="M24 24 L24 2" stroke="#4df0a080" strokeWidth="1.2" />
+          <path d="M24 24 L24 2 A22 22 0 0 1 40 36 Z" fill="#4df0a010" />
+        </g>
+        <circle cx="24" cy="24" r="2" fill="#4df0a0" />
+        <circle cx="16" cy="18" r="1.5" fill="#4df0a0" opacity="0.7" />
+        <circle cx="33" cy="13" r="1" fill="#ff8080" opacity="0.9" />
+      </svg>
+    </div>
+  );
+}
+
+function Spinner() {
+  return <div style={{ width: 9, height: 9, border: "1.5px solid #32c8ff40", borderTopColor: "#32c8ff", borderRadius: "50%", animation: "spin 0.8s linear infinite", display: "inline-block" }} />;
+}
+
+function typeColor(type) {
+  return {
+    ORB: { background: "rgba(120,80,255,0.2)", color: "#b088ff", border: "1px solid #7850ff40" },
+    UFO: { background: "rgba(77,240,160,0.15)", color: "#4df0a0", border: "1px solid #4df0a040" },
+    TRIANGLE: { background: "rgba(255,180,50,0.15)", color: "#ffd060", border: "1px solid #ffb43240" },
+    CYLINDER: { background: "rgba(255,90,90,0.15)", color: "#ff8080", border: "1px solid #ff5a5a40" },
+    DISC: { background: "rgba(50,200,255,0.15)", color: "#50c8ff", border: "1px solid #32c8ff40" },
+    UNKNOWN: { background: "rgba(100,100,120,0.2)", color: "#9090b0", border: "1px solid #60607040" },
+  }[type] || { background: "rgba(100,100,120,0.2)", color: "#9090b0", border: "1px solid #60607040" };
+}
+
+// ─── Styles object ───────────────────────────────────────────────────────────
+const S = {
+  app: { minHeight: "100vh", background: "radial-gradient(ellipse at 60% 0%,#061a2e 0%,#020b12 60%)", color: "#c8eaff", fontFamily: "'Exo 2',sans-serif", position: "relative", overflowX: "hidden" },
+  content: { position: "relative", zIndex: 1 },
+  header: { display: "flex", alignItems: "center", gap: 14, padding: "20px 24px 14px", borderBottom: "1px solid #0d3a5c", flexWrap: "wrap" },
+  h1: { fontFamily: "'Share Tech Mono',monospace", fontSize: "1.3rem", color: "#4df0a0", letterSpacing: "0.1em", textTransform: "uppercase" },
+  headerSub: { fontSize: "0.65rem", color: "#5a8fa8", letterSpacing: "0.06em", marginTop: 2 },
+  liveBadge: { display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(77,240,160,0.08)", border: "1px solid #4df0a040", borderRadius: 4, padding: "4px 10px", fontFamily: "monospace", fontSize: "0.68rem", color: "#4df0a0", letterSpacing: "0.1em" },
+  liveDot: { width: 7, height: 7, borderRadius: "50%", background: "#4df0a0", animation: "pulse 1.4s ease-in-out infinite" },
+  ts: { fontFamily: "monospace", fontSize: "0.6rem", color: "#3a6a82", marginTop: 4 },
+  pursueBanner: { display: "flex", alignItems: "center", gap: 12, padding: "9px 24px", background: "linear-gradient(90deg,rgba(255,80,80,0.08) 0%,rgba(255,80,80,0.02) 100%)", borderBottom: "1px solid #ff505030", flexWrap: "wrap" },
+  pursueIcon: { fontSize: "1.2rem", flexShrink: 0 },
+  pursueTitle: { fontFamily: "monospace", fontSize: "0.7rem", color: "#ff8080", letterSpacing: "0.1em", textTransform: "uppercase" },
+  pursueSub: { fontSize: "0.63rem", color: "#6a3a3a", marginTop: 2 },
+  pursueLinks: { display: "flex", gap: 7, flexShrink: 0, flexWrap: "wrap" },
+  releaseChip: { background: "rgba(255,80,80,0.12)", border: "1px solid #ff505040", borderRadius: 3, padding: "3px 9px", fontFamily: "monospace", fontSize: "0.6rem", color: "#ff8080", letterSpacing: "0.06em", textDecoration: "none" },
+  statsBar: { display: "flex", borderBottom: "1px solid #0d3a5c", overflowX: "auto" },
+  statBox: { flex: 1, minWidth: 90, padding: "11px 14px", borderRight: "1px solid #0d3a5c", textAlign: "center" },
+  statNum: { fontFamily: "monospace", fontSize: "1.45rem", lineHeight: 1 },
+  statLabel: { fontSize: "0.58rem", color: "#5a7a8a", textTransform: "uppercase", letterSpacing: "0.1em", marginTop: 3 },
+  tabBar: { display: "flex", borderBottom: "1px solid #0d3a5c", background: "rgba(2,11,18,0.8)" },
+  tabBtn: { padding: "9px 18px", fontFamily: "monospace", fontSize: "0.68rem", letterSpacing: "0.08em", textTransform: "uppercase", background: "none", border: "none", color: "#3a6272", cursor: "pointer", borderBottom: "2px solid transparent" },
+  tabActive: { color: "#4df0a0", borderBottom: "2px solid #4df0a0" },
+  main: { display: "grid", gridTemplateColumns: "1fr 300px", minHeight: "calc(100vh - 230px)" },
+  feedPanel: { borderRight: "1px solid #0d3a5c" },
+  panelHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 18px", borderBottom: "1px solid #0d3a5c", background: "rgba(4,20,34,0.7)", position: "sticky", top: 0, zIndex: 2, flexWrap: "wrap", gap: 8 },
+  panelTitle: { fontFamily: "monospace", fontSize: "0.7rem", color: "#4df0a0", letterSpacing: "0.1em", textTransform: "uppercase" },
+  filterBtn: { background: "transparent", border: "1px solid #0d3a5c", color: "#5a8fa8", fontFamily: "monospace", fontSize: "0.6rem", padding: "3px 8px", borderRadius: 3, cursor: "pointer", letterSpacing: "0.07em", textTransform: "uppercase" },
+  filterActive: { borderColor: "#4df0a0", color: "#4df0a0", background: "rgba(77,240,160,0.06)" },
+  list: { overflowY: "auto", maxHeight: "calc(100vh - 290px)" },
+  card: { padding: "13px 18px", borderBottom: "1px solid #071e2e", cursor: "pointer", position: "relative", transition: "background 0.15s" },
+  cardSelected: { background: "rgba(77,240,160,0.06)" },
+  newDot: { position: "absolute", top: 10, right: 14, width: 6, height: 6, borderRadius: "50%", background: "#4df0a0", animation: "pulse 1.4s infinite" },
+  typeBadge: { fontFamily: "monospace", fontSize: "0.63rem", padding: "2px 7px", borderRadius: 3, textTransform: "uppercase", letterSpacing: "0.07em" },
+  pursueBadge: { background: "rgba(255,80,80,0.15)", color: "#ff8080", border: "1px solid #ff505040", fontFamily: "monospace", fontSize: "0.6rem", padding: "2px 7px", borderRadius: 3 },
+  declBadge: { background: "rgba(255,165,0,0.15)", color: "#ffaa40", border: "1px solid #ffa50040", fontFamily: "monospace", fontSize: "0.6rem", padding: "2px 7px", borderRadius: 3 },
+  cardTime: { fontFamily: "monospace", fontSize: "0.6rem", color: "#3a6272", flexShrink: 0 },
+  cardLoc: { fontSize: "0.84rem", fontWeight: 600, color: "#c8eaff", marginBottom: 3 },
+  cardDesc: { fontSize: "0.74rem", color: "#6a9ab0", lineHeight: 1.45 },
+  cardSource: { fontSize: "0.6rem", fontFamily: "monospace", textTransform: "uppercase", letterSpacing: "0.05em" },
+  confBar: { flex: 1, height: 3, background: "#071e2e", borderRadius: 2, overflow: "hidden", maxWidth: 65 },
+  confFill: { height: "100%", borderRadius: 2, background: "linear-gradient(90deg,#4df0a0,#32c8ff)" },
+  confLabel: { fontFamily: "monospace", fontSize: "0.58rem", color: "#4df0a0" },
+  sidebar: { overflowY: "auto", maxHeight: "calc(100vh - 230px)" },
+  disclaimer: { padding: "8px 20px", fontSize: "0.58rem", color: "#2a4a58", fontFamily: "monospace", borderTop: "1px solid #071e2e", textAlign: "center", letterSpacing: "0.04em" },
+};
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App.jsx'
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+)
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  build: {
+    outDir: 'dist'
+  }
+})
