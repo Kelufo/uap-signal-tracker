@@ -205,22 +205,23 @@ body{background:#020b12;color:#c8eaff;font-family:'Exo 2',sans-serif;overflow-x:
     <span style="font-size:1.2rem;flex-shrink:0">🏛️</span>
     <div>
       <div class="pursue-title">PURSUE · U.S. Dept. of War · war.gov/UFO</div>
-      <div class="pursue-sub">Presidential Unsealing &amp; Reporting System for UAP Encounters · Trump directive Feb 19, 2026 · 2 tranches released</div>
+      <div class="pursue-sub">Presidential Unsealing &amp; Reporting System for UAP Encounters · Trump directive Feb 19, 2026 · 3 tranches released</div>
     </div>
     <div class="pursue-links">
       <a class="rchip" href="https://www.war.gov/UFO/?release=01" target="_blank">Release 01 · May 8</a>
       <a class="rchip" href="https://www.war.gov/UFO/?release=02" target="_blank">Release 02 · May 22</a>
+      <a class="rchip" href="https://www.war.gov/UFO/?release=03" target="_blank" style="background:rgba(255,80,80,.25);border-color:#ff8080">🆕 Release 03 · Jun 12</a>
       <a class="rchip" href="https://www.war.gov/UFO/" target="_blank">↗ war.gov/UFO</a>
     </div>
   </div>
 
   <!-- Stats -->
   <div class="stats-bar">
-    <div class="stat-box"><div class="stat-num" style="color:#ff8080" id="stat-pursue">6</div><div class="stat-label">DoW Declassified</div></div>
+    <div class="stat-box"><div class="stat-num" style="color:#ff8080" id="stat-pursue">11</div><div class="stat-label">DoW Declassified</div></div>
     <div class="stat-box"><div class="stat-num" style="color:#4df0a0" id="stat-total">0</div><div class="stat-label">Total Tracked</div></div>
     <div class="stat-box"><div class="stat-num" style="color:#4df0a0" id="stat-24h">0</div><div class="stat-label">Last 24 Hours</div></div>
     <div class="stat-box"><div class="stat-num" style="color:#4df0a0" id="stat-hconf">0</div><div class="stat-label">High Confidence</div></div>
-    <div class="stat-box"><div class="stat-num" style="color:#ff8080">2</div><div class="stat-label">PURSUE Releases</div></div>
+    <div class="stat-box"><div class="stat-num" style="color:#ff8080">3</div><div class="stat-label">PURSUE Releases</div></div>
   </div>
 
   <!-- Tabs -->
@@ -267,6 +268,16 @@ body{background:#020b12;color:#c8eaff;font-family:'Exo 2',sans-serif;overflow-x:
             <a class="rel-link" href="https://www.war.gov/medialink/ufo/052226/release_02/release_02_document_bundle.zip" target="_blank">⬇ Documents (70 MB)</a>
             <a class="rel-link" href="https://d34w7g4gy10iej.cloudfront.net/uap052226.zip" target="_blank">⬇ Videos (5.6 GB)</a>
             <a class="rel-link" href="https://www.war.gov/News/Releases/Release/Article/4499305/" target="_blank">↗ Press Release</a>
+          </div>
+        </div>
+        <div class="rel-box" style="border-color:#ff8080;background:rgba(255,80,80,.08)">
+          <div class="rel-label" style="color:#ff5050">🆕 Release 03 — NEW</div>
+          <div class="rel-date">June 12, 2026</div>
+          <div class="rel-desc">FBI orb sighting reports (Colorado Springs 2022, Northeastern US 2025-2026), CIA Zimbabwe document, 1949 Army flying saucer study, orb video footage.</div>
+          <div class="rel-links">
+            <a class="rel-link" href="https://www.war.gov/medialink/ufo/061226/release_03/release_03_documents.zip" target="_blank">⬇ Documents (826 MB)</a>
+            <a class="rel-link" href="https://d34w7g4gy10iej.cloudfront.net/release_03/uap_videos_061226.zip" target="_blank">⬇ Videos (4.6 GB)</a>
+            <a class="rel-link" href="https://www.war.gov/News/Releases/Release/Article/4515408/" target="_blank">↗ Press Release</a>
           </div>
         </div>
       </div>
@@ -319,7 +330,27 @@ const PURSUE_DATA = [
   {id:"pursue-6",type:"UFO",location:"USSR (CIA Intelligence Report)",datetime:"1973-01-01T00:00:00Z",
    desc:"Declassified 1973 CIA intelligence report on UAP sighting in the Soviet Union. Cold War era document.",
    source:"WAR.GOV / PURSUE",duration:"Unknown",altitude:"Unknown",shape:"UNKNOWN",confidence:88,witnesses:0,isNew:false,isPursue:true,
-   release:"RELEASE 02",docId:"CIA-UAP-D001",weather:"Historical",tags:["declassified","PURSUE","CIA","USSR","Cold War","historical"]}
+   release:"RELEASE 02",docId:"CIA-UAP-D001",weather:"Historical",tags:["declassified","PURSUE","CIA","USSR","Cold War","historical"]},
+  {id:"pursue-7",type:"ORB",location:"Colorado Springs, CO",datetime:"2022-01-01T00:00:00Z",
+   desc:"PURSUE Release 03 — FBI-UAP-D002: FBI field report and digital rendering of unresolved UAP incident in Colorado Springs, 2022. FD-1057 witness interview transcript included. Intelligence Community Assessment also released (ICA-UAP-D001).",
+   source:"WAR.GOV / PURSUE",duration:"Unknown",altitude:"Unknown",shape:"ORB",confidence:91,witnesses:0,isNew:true,isPursue:true,
+   release:"RELEASE 03",docId:"FBI-UAP-D002",weather:"Sensor/witness data",tags:["declassified","PURSUE","FBI","Colorado Springs","2022","NEW"]},
+  {id:"pursue-8",type:"ORB",location:"Northeastern USA (Orb Sighting)",datetime:"2025-01-01T00:00:00Z",
+   desc:"PURSUE Release 03 — FBI-UAP-D009/D010: Two FBI FD-302 reports on northeastern US orb sightings, 2025-2026. Video footage also released (FBI-UAP-PR004). Witnesses interviewed by FBI field agents. Highly redacted.",
+   source:"WAR.GOV / PURSUE",duration:"Unknown",altitude:"Low",shape:"ORB",confidence:94,witnesses:0,isNew:true,isPursue:true,
+   release:"RELEASE 03",docId:"FBI-UAP-D009",weather:"Witness reports",tags:["declassified","PURSUE","FBI","orb","northeastern","2025","NEW"]},
+  {id:"pursue-9",type:"ORB",location:"Northeastern USA (Pond Footage)",datetime:"2024-01-01T00:00:00Z",
+   desc:"PURSUE Release 03 — FBI-UAP-PR003: Video footage of orbs over a pond, 2024. Still images extracted show ball of light hovering over water surface. Released alongside northeastern orb sighting documents.",
+   source:"WAR.GOV / PURSUE",duration:"Unknown",altitude:"Very low — surface",shape:"ORB",confidence:96,witnesses:0,isNew:true,isPursue:true,
+   release:"RELEASE 03",docId:"FBI-UAP-PR003",weather:"Clear",tags:["declassified","PURSUE","FBI","orb","video","pond","2024","NEW"]},
+  {id:"pursue-10",type:"UFO",location:"Zimbabwe (CIA Report)",datetime:"1975-01-01T00:00:00Z",
+   desc:"PURSUE Release 03 — CIA-UAP-017: Declassified CIA document on UAP incident in Zimbabwe. Document references placement on high alert due to perceived aggressive foreign posturing. Cold War era intelligence.",
+   source:"WAR.GOV / PURSUE",duration:"Unknown",altitude:"Unknown",shape:"UNKNOWN",confidence:85,witnesses:0,isNew:true,isPursue:true,
+   release:"RELEASE 03",docId:"CIA-UAP-017",weather:"Historical",tags:["declassified","PURSUE","CIA","Zimbabwe","Cold War","NEW"]},
+  {id:"pursue-11",type:"DISC",location:"USA (U.S. Army Study)",datetime:"1949-01-01T00:00:00Z",
+   desc:"PURSUE Release 03 — DOW-UAP-D084: Declassified 1949 U.S. Army study on flying saucers. Stamped SECRET, now fully declassified. Among the oldest government UAP documents publicly released under PURSUE.",
+   source:"WAR.GOV / PURSUE",duration:"Multiple",altitude:"Various",shape:"DISC",confidence:89,witnesses:0,isNew:true,isPursue:true,
+   release:"RELEASE 03",docId:"DOW-UAP-D084",weather:"Historical",tags:["declassified","PURSUE","Army","1949","flying saucer","historical","NEW"]}
 ];
 const STATIC_DATA = [
   {id:"s-1",type:"ORB",location:"Kingman, AZ",datetime:new Date(Date.now()-28*60000).toISOString(),
