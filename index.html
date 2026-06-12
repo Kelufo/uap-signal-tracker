@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<meta name="google-site-verification" content="Hf8YBmD9WYOr_7uKCtO8LYH4VTn8YVGiy6g6dt2ATPA" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>UAP Signal Tracker</title>
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8914439233367644" crossorigin="anonymous"></script>
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;700&display=swap" rel="stylesheet"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -166,8 +166,6 @@ body{background:#020b12;color:#c8eaff;font-family:'Exo 2',sans-serif;overflow-x:
 /* Disclaimer */
 .disclaimer{padding:8px 20px;font-size:.58rem;color:#2a4a58;font-family:'Share Tech Mono',monospace;border-top:1px solid #071e2e;text-align:center;letter-spacing:.04em;position:relative;z-index:2}
 </style>
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2668220797172134"
-crossorigin="anonymous"></script>
 </head>
 <body>
 <div class="app">
@@ -538,7 +536,7 @@ setInterval(()=>{
       desc:descs[Math.floor(Math.random()*descs.length)],
       source:srcs[Math.floor(Math.random()*srcs.length)],
       duration:Math.floor(Math.random()*15+1)+" min",
-      altitude:"~"+(Math.floor(Math.random()*28+2)*1000)+" ft",
+      altitude:"~"+(Math.floor(Math.random()*28+2)*1000)+" ft AGL",
       shape:tp,confidence:Math.floor(Math.random()*40+50),
       witnesses:Math.floor(Math.random()*8+1),isNew:true,isPursue:false,
       weather:"Clear",tags:["incoming"]
@@ -547,7 +545,7 @@ setInterval(()=>{
     updateStats();
     if(activeTab==="FEED")renderFeed();
   }
-},25000);
+},45000);
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 renderFilters();
